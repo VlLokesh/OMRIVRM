@@ -32,5 +32,11 @@ The API returns:
 Use a real answer-key image instead of `img.png` for actual scoring.
 
 Notes:
-- uploaded student and answer-key images are deleted after processing
+- uploaded student and answer-key images are processed fully in memory
 - the PDF is generated in memory and is not stored on disk
+
+## Vercel Deployment
+- `vercel.json` routes all requests to `main.py`
+- `runtime.txt` pins the Python runtime
+- `opencv-python-headless` is used for server deployment compatibility
+- OCR text-field extraction is disabled, so the deployment does not depend on Tesseract

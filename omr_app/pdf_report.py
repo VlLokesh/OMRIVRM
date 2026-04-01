@@ -67,7 +67,7 @@ def _render_result_pdf(
             y = draw_header(page_number)
             pdf.setFont("Helvetica", 10)
 
-        status = "Correct" if row["is_correct"] else "INCORRECT"
+        status = "Correct" if row["is_correct"] else "Incorrect"
         if row["student"] == "BLANK":
             status = "Blank"
         elif row["student"] == "INVALID":

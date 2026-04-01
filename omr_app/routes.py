@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import base64
-import os
 import uuid
 from typing import Any
 
-from flask import Blueprint, current_app, jsonify, render_template, request
+from flask import Blueprint, jsonify, render_template, request
 from werkzeug.utils import secure_filename
 
 from .config import ALLOWED_EXTENSIONS
@@ -24,21 +23,6 @@ def _collect_request_config() -> dict[str, Any]:
     if request.is_json:
         config.update(request.get_json(silent=True) or {})
     return config
-
-
-def _save_upload(file_storage, destination_folder: str) -> str:
-    filename = f"{uuid.uuid4().hex}_{secure_filename(file_storage.filename)}"
-    file_path = os.path.join(destination_folder, filename)
-    file_storage.save(file_path)
-    return file_path
-
-
-def _delete_file_if_exists(path: str) -> None:
-    try:
-        if path and os.path.exists(path):
-            os.remove(path)
-    except OSError:
-        pass
 
 
 @omr_blueprint.route("/", methods=["GET"])
@@ -63,17 +47,15 @@ def evaluate_omr():
     if not allowed_file(student_file.filename) or not allowed_file(answer_key_file.filename):
         return jsonify({"error": "Only PNG/JPG/JPEG files are supported."}), 400
 
-    upload_folder = current_app.config["UPLOAD_FOLDER"]
-    student_path = _save_upload(student_file, upload_folder)
-    answer_key_path = _save_upload(answer_key_file, upload_folder)
-
     try:
+        student_bytes = student_file.read()
+        answer_key_bytes = answer_key_file.read()
         result = evaluate_submission(
-            student_image_path=student_path,
-            answer_key_image_path=answer_key_path,
+            student_image_bytes=student_bytes,
+            answer_key_image_bytes=answer_key_bytes,
             config=_collect_request_config(),
         )
-        pdf_filename = f"{uuid.uuid4().hex}_omr_result.pdf"
+        pdf_filename = "evaluator_omr_result.pdf"
         metadata = dict(result.student.fields)
         metadata["Student Image"] = secure_filename(student_file.filename)
         metadata["Answer Key Image"] = secure_filename(answer_key_file.filename)
@@ -95,9 +77,6 @@ def evaluate_omr():
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:  # pragma: no cover
         return jsonify({"error": f"Processing failed: {exc}"}), 500
-    finally:
-        _delete_file_if_exists(student_path)
-        _delete_file_if_exists(answer_key_path)
 
     return jsonify(
         {
