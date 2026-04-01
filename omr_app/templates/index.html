@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OMR Evaluator</title>
+    <style>
+        :root {
+            --bg: #f4efe4;
+            --paper: rgba(255, 251, 244, 0.9);
+            --ink: #1f2a24;
+            --muted: #59665c;
+            --accent: #c9622d;
+            --accent-dark: #8c3f18;
+            --line: rgba(31, 42, 36, 0.14);
+            --good: #1c7c54;
+            --bad: #a3342b;
+            --shadow: 0 24px 80px rgba(57, 43, 26, 0.14);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Georgia, "Times New Roman", serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at top left, rgba(201, 98, 45, 0.18), transparent 34%),
+                radial-gradient(circle at bottom right, rgba(28, 124, 84, 0.14), transparent 28%),
+                linear-gradient(135deg, #f8f2e8 0%, #eee5d2 45%, #f8f4ec 100%);
+            padding: 24px;
+        }
+
+        .shell {
+            max-width: 1180px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1.05fr 0.95fr;
+            gap: 24px;
+        }
+
+        .panel {
+            background: var(--paper);
+            border: 1px solid var(--line);
+            border-radius: 24px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+        }
+
+        .hero {
+            padding: 32px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::after {
+            content: "";
+            position: absolute;
+            inset: auto -100px -140px auto;
+            width: 260px;
+            height: 260px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(201, 98, 45, 0.24), transparent 65%);
+        }
+
+        .eyebrow {
+            display: inline-block;
+            margin-bottom: 12px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(201, 98, 45, 0.12);
+            color: var(--accent-dark);
+            font-size: 12px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            margin: 0 0 14px;
+            font-size: clamp(2.5rem, 5vw, 4.4rem);
+            line-height: 0.95;
+            letter-spacing: -0.05em;
+        }
+
+        .lead {
+            max-width: 46ch;
+            font-size: 1.05rem;
+            line-height: 1.7;
+            color: var(--muted);
+        }
+
+        .note-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 28px;
+        }
+
+        .note {
+            padding: 14px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.55);
+            border: 1px solid rgba(31, 42, 36, 0.08);
+            font-size: 0.95rem;
+            line-height: 1.45;
+        }
+
+        .workspace {
+            padding: 28px;
+            display: grid;
+            gap: 20px;
+        }
+
+        .section-title {
+            margin: 0;
+            font-size: 1.3rem;
+        }
+
+        .section-copy {
+            margin: 6px 0 0;
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        form {
+            display: grid;
+            gap: 16px;
+        }
+
+        .upload-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .dropzone {
+            position: relative;
+            min-height: 220px;
+            padding: 18px;
+            border: 1px dashed rgba(31, 42, 36, 0.2);
+            border-radius: 22px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.85), rgba(248, 242, 232, 0.95)),
+                repeating-linear-gradient(
+                    -45deg,
+                    rgba(201, 98, 45, 0.04) 0,
+                    rgba(201, 98, 45, 0.04) 10px,
+                    transparent 10px,
+                    transparent 20px
+                );
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .dropzone h3 {
+            margin: 0;
+            font-size: 1.1rem;
+        }
+
+        .dropzone p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .dropzone input[type="file"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.85);
+        }
+
+        .file-name {
+            min-height: 24px;
+            color: var(--accent-dark);
+            font-size: 0.95rem;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .field {
+            display: grid;
+            gap: 8px;
+        }
+
+        label {
+            font-size: 0.92rem;
+            color: var(--muted);
+        }
+
+        input[type="number"],
+        input[type="text"] {
+            width: 100%;
+            padding: 13px 14px;
+            border-radius: 14px;
+            border: 1px solid var(--line);
+            background: rgba(255, 255, 255, 0.85);
+            font: inherit;
+            color: var(--ink);
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            border: 0;
+            border-radius: 999px;
+            padding: 14px 22px;
+            font: inherit;
+            cursor: pointer;
+            transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        button:disabled {
+            opacity: 0.65;
+            cursor: wait;
+            transform: none;
+        }
+
+        .primary {
+            background: linear-gradient(135deg, var(--accent), #df8a49);
+            color: white;
+            box-shadow: 0 12px 28px rgba(201, 98, 45, 0.28);
+        }
+
+        .secondary {
+            background: rgba(31, 42, 36, 0.08);
+            color: var(--ink);
+        }
+
+        .status {
+            min-height: 24px;
+            font-size: 0.96rem;
+            color: var(--muted);
+        }
+
+        .status.error {
+            color: var(--bad);
+        }
+
+        .status.success {
+            color: var(--good);
+        }
+
+        .results {
+            display: none;
+            gap: 18px;
+        }
+
+        .results.visible {
+            display: grid;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .metric {
+            padding: 14px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(31, 42, 36, 0.08);
+        }
+
+        .metric strong {
+            display: block;
+            font-size: 1.4rem;
+            margin-bottom: 6px;
+        }
+
+        .response-box {
+            max-height: 340px;
+            overflow: auto;
+            margin: 0;
+            padding: 16px;
+            border-radius: 18px;
+            background: #1f231f;
+            color: #f3f0e9;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 980px) {
+            .shell {
+                grid-template-columns: 1fr;
+            }
+
+            .note-grid,
+            .upload-grid,
+            .config-grid,
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="shell">
+        <section class="panel hero">
+            <span class="eyebrow">OMR Workspace</span>
+            <h1>Upload both sheets. Review score. Download the PDF.</h1>
+            <p class="lead">
+                This UI sends the student sheet and the answer key to the Flask OMR pipeline, evaluates each question,
+                and returns a downloadable result PDF without storing the generated report on disk.
+            </p>
+            <div class="note-grid">
+                <article class="note">
+                    <strong>Input</strong><br>
+                    Student OMR sheet and answer-key sheet in `PNG`, `JPG`, or `JPEG`.
+                </article>
+                <article class="note">
+                    <strong>Processing</strong><br>
+                    Bubble detection, answer mapping, comparison, score summary, and PDF generation.
+                </article>
+                <article class="note">
+                    <strong>Output</strong><br>
+                    Score summary in the page and a downloadable PDF built from the API response.
+                </article>
+            </div>
+        </section>
+
+        <section class="panel workspace">
+            <div>
+                <h2 class="section-title">Evaluate Sheets</h2>
+                <p class="section-copy">Choose the student answer sheet and the correct answer sheet, then run evaluation.</p>
+            </div>
+
+            <form id="omr-form">
+                <div class="upload-grid">
+                    <section class="dropzone">
+                        <div>
+                            <h3>Student Sheet</h3>
+                            <p>Upload the scanned answer sheet to be graded.</p>
+                        </div>
+                        <div>
+                            <input id="student_file" name="student_file" type="file" accept=".png,.jpg,.jpeg" required>
+                            <div class="file-name" id="student-name"></div>
+                        </div>
+                    </section>
+
+                    <section class="dropzone">
+                        <div>
+                            <h3>Answer Key Sheet</h3>
+                            <p>Upload the master sheet that contains the correct answers.</p>
+                        </div>
+                        <div>
+                            <input id="answer_key_file" name="answer_key_file" type="file" accept=".png,.jpg,.jpeg" required>
+                            <div class="file-name" id="answer-name"></div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="config-grid">
+                    <div class="field">
+                        <label for="question_count">Question Count</label>
+                        <input id="question_count" name="question_count" type="number" min="1" value="150">
+                    </div>
+                    <div class="field">
+                        <label for="options">Options</label>
+                        <input id="options" name="options" type="text" value='["A","B","C","D"]'>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button class="primary" id="submit-button" type="submit">Process OMR</button>
+                    <button class="secondary" id="download-button" type="button" disabled>Download Result PDF</button>
+                </div>
+            </form>
+
+            <div class="status" id="status"></div>
+
+            <section class="results" id="results">
+                <div class="summary-grid" id="summary-grid"></div>
+                <pre class="response-box" id="response-preview"></pre>
+            </section>
+        </section>
+    </main>
+
+    <script>
+        const form = document.getElementById("omr-form");
+        const submitButton = document.getElementById("submit-button");
+        const downloadButton = document.getElementById("download-button");
+        const statusBox = document.getElementById("status");
+        const results = document.getElementById("results");
+        const summaryGrid = document.getElementById("summary-grid");
+        const responsePreview = document.getElementById("response-preview");
+        const studentInput = document.getElementById("student_file");
+        const answerInput = document.getElementById("answer_key_file");
+        const studentName = document.getElementById("student-name");
+        const answerName = document.getElementById("answer-name");
+
+        let currentPdfBytes = null;
+        let currentPdfFilename = "omr_result.pdf";
+
+        function setStatus(message, type = "") {
+            statusBox.textContent = message;
+            statusBox.className = `status ${type}`.trim();
+        }
+
+        function updateFileName(input, target) {
+            target.textContent = input.files[0] ? input.files[0].name : "";
+        }
+
+        function b64ToBlob(base64, mimeType) {
+            const byteChars = atob(base64);
+            const byteNumbers = new Array(byteChars.length);
+            for (let i = 0; i < byteChars.length; i += 1) {
+                byteNumbers[i] = byteChars.charCodeAt(i);
+            }
+            return new Blob([new Uint8Array(byteNumbers)], { type: mimeType });
+        }
+
+        function renderSummary(summary) {
+            summaryGrid.innerHTML = "";
+            const items = [
+                ["Total", summary.total_questions],
+                ["Correct", summary.correct],
+                ["Incorrect", summary.incorrect],
+                ["Blank", summary.blank],
+                ["Score %", summary.score_percent],
+            ];
+
+            items.forEach(([label, value]) => {
+                const card = document.createElement("article");
+                card.className = "metric";
+                card.innerHTML = `<strong>${value}</strong><span>${label}</span>`;
+                summaryGrid.appendChild(card);
+            });
+        }
+
+        function triggerDownload() {
+            if (!currentPdfBytes) {
+                return;
+            }
+
+            const blob = b64ToBlob(currentPdfBytes, "application/pdf");
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = currentPdfFilename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        studentInput.addEventListener("change", () => updateFileName(studentInput, studentName));
+        answerInput.addEventListener("change", () => updateFileName(answerInput, answerName));
+        downloadButton.addEventListener("click", triggerDownload);
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            currentPdfBytes = null;
+            currentPdfFilename = "omr_result.pdf";
+            downloadButton.disabled = true;
+            results.classList.remove("visible");
+            setStatus("Processing sheets...", "");
+            submitButton.disabled = true;
+
+            const payload = new FormData(form);
+
+            try {
+                const response = await fetch("/evaluate", {
+                    method: "POST",
+                    body: payload,
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || "Processing failed.");
+                }
+
+                currentPdfBytes = data.pdf_base64;
+                currentPdfFilename = data.pdf_filename || "omr_result.pdf";
+                renderSummary(data.score_summary);
+                responsePreview.textContent = JSON.stringify({
+                    score_summary: data.score_summary,
+                    fields: data.fields,
+                    aligned_shape: data.aligned_shape,
+                }, null, 2);
+                results.classList.add("visible");
+                downloadButton.disabled = false;
+                setStatus("Evaluation completed. You can now download the PDF report.", "success");
+            } catch (error) {
+                setStatus(error.message || "Processing failed.", "error");
+            } finally {
+                submitButton.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
