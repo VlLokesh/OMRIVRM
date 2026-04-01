@@ -385,9 +385,6 @@
         const studentName = document.getElementById("student-name");
         const answerName = document.getElementById("answer-name");
 
-        let currentPdfBytes = null;
-        let currentPdfFilename = "omr_result.pdf";
-
         function setStatus(message, type = "") {
             statusBox.textContent = message;
             statusBox.className = `status ${type}`.trim();
@@ -395,15 +392,6 @@
 
         function updateFileName(input, target) {
             target.textContent = input.files[0] ? input.files[0].name : "";
-        }
-
-        function b64ToBlob(base64, mimeType) {
-            const byteChars = atob(base64);
-            const byteNumbers = new Array(byteChars.length);
-            for (let i = 0; i < byteChars.length; i += 1) {
-                byteNumbers[i] = byteChars.charCodeAt(i);
-            }
-            return new Blob([new Uint8Array(byteNumbers)], { type: mimeType });
         }
 
         function renderSummary(summary) {
@@ -424,20 +412,37 @@
             });
         }
 
-        function triggerDownload() {
-            if (!currentPdfBytes) {
-                return;
-            }
+        async function triggerDownload() {
+            downloadButton.disabled = true;
+            setStatus("Generating PDF...", "");
 
-            const blob = b64ToBlob(currentPdfBytes, "application/pdf");
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = currentPdfFilename;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            URL.revokeObjectURL(url);
+            try {
+                const payload = new FormData(form);
+                const response = await fetch("/evaluate/pdf", {
+                    method: "POST",
+                    body: payload,
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.error || "PDF generation failed.");
+                }
+
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "evaluator_omr_result.pdf";
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(url);
+                setStatus("PDF downloaded successfully.", "success");
+            } catch (error) {
+                setStatus(error.message || "PDF generation failed.", "error");
+            } finally {
+                downloadButton.disabled = false;
+            }
         }
 
         studentInput.addEventListener("change", () => updateFileName(studentInput, studentName));
@@ -446,8 +451,6 @@
 
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
-            currentPdfBytes = null;
-            currentPdfFilename = "omr_result.pdf";
             downloadButton.disabled = true;
             results.classList.remove("visible");
             setStatus("Processing sheets...", "");
@@ -466,8 +469,6 @@
                     throw new Error(data.error || "Processing failed.");
                 }
 
-                currentPdfBytes = data.pdf_base64;
-                currentPdfFilename = data.pdf_filename || "omr_result.pdf";
                 renderSummary(data.score_summary);
                 responsePreview.textContent = JSON.stringify({
                     score_summary: data.score_summary,
@@ -476,7 +477,7 @@
                 }, null, 2);
                 results.classList.add("visible");
                 downloadButton.disabled = false;
-                setStatus("Evaluation completed. You can now download the PDF report.", "success");
+                setStatus("Evaluation completed. You can now generate and download the PDF report.", "success");
             } catch (error) {
                 setStatus(error.message || "Processing failed.", "error");
             } finally {

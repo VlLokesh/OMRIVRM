@@ -26,14 +26,16 @@ The API returns:
 - `student_answers`
 - `answer_key_answers`
 - `comparison`
-- `pdf_filename`
-- `pdf_base64`
 
 Use a real answer-key image instead of `img.png` for actual scoring.
 
 Notes:
 - uploaded student and answer-key images are processed fully in memory
 - the PDF is generated in memory and is not stored on disk
+
+## PDF Download
+- `POST /evaluate` returns JSON summary only
+- `POST /evaluate/pdf` returns the generated PDF directly as `application/pdf`
 
 ## Vercel Deployment
 - `vercel.json` routes all requests to `main.py`
