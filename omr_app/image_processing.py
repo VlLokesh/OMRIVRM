@@ -7,6 +7,20 @@ import numpy as np
 
 from .models import Bubble
 
+# Strict extraction controls:
+# - only dark, heavily filled bubbles are treated as marked (non-zero fill_ratio)
+# - only near-circular contour candidates are accepted as bubble shapes
+MIN_DARK_FILL_RATIO = 0.80
+MAX_DARK_FILL_RATIO = 1.00
+MIN_BUBBLE_CIRCULARITY = 0.75
+MIN_BUBBLE_SOLIDITY = 0.85
+
+
+def _normalize_dark_fill(fill_ratio: float) -> float:
+    if MIN_DARK_FILL_RATIO <= fill_ratio <= MAX_DARK_FILL_RATIO:
+        return fill_ratio
+    return 0.0
+
 
 def order_points(points: np.ndarray) -> np.ndarray:
     rect = np.zeros((4, 2), dtype="float32")
@@ -90,7 +104,7 @@ def _bubble_from_box(thresh: np.ndarray, box: tuple[int, int, int, int]) -> Bubb
         ),
         bbox=box,
         center=(x + w // 2, y + h // 2),
-        fill_ratio=fill_ratio,
+        fill_ratio=_normalize_dark_fill(fill_ratio),
     )
 
 
@@ -106,7 +120,7 @@ def _bubble_from_circle(thresh: np.ndarray, center: tuple[int, int], radius: int
         contour=np.array([[[x, y]]], dtype=np.int32),
         bbox=(x - radius, y - radius, diameter, diameter),
         center=center,
-        fill_ratio=fill_ratio,
+        fill_ratio=_normalize_dark_fill(fill_ratio),
     )
 
 
@@ -183,10 +197,19 @@ def _extract_bubbles_contours(thresholded: np.ndarray) -> list[Bubble]:
         x, y, w, h = cv2.boundingRect(contour)
         aspect_ratio = w / float(h) if h else 0
         area = cv2.contourArea(contour)
+        perimeter = cv2.arcLength(contour, True)
+        hull = cv2.convexHull(contour)
+        hull_area = cv2.contourArea(hull)
+        circularity = (4.0 * np.pi * area / (perimeter * perimeter)) if perimeter else 0.0
+        solidity = (area / hull_area) if hull_area else 0.0
 
         if area < 150 or w < 12 or h < 12:
             continue
         if not 0.75 <= aspect_ratio <= 1.25:
+            continue
+        if circularity < MIN_BUBBLE_CIRCULARITY:
+            continue
+        if solidity < MIN_BUBBLE_SOLIDITY:
             continue
 
         roi = thresholded[y : y + h, x : x + w]
@@ -199,7 +222,7 @@ def _extract_bubbles_contours(thresholded: np.ndarray) -> list[Bubble]:
                 contour=contour,
                 bbox=(x, y, w, h),
                 center=(x + w // 2, y + h // 2),
-                fill_ratio=fill_ratio,
+                fill_ratio=_normalize_dark_fill(fill_ratio),
             )
         )
 
